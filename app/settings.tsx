@@ -1,3 +1,4 @@
+import {useRouter} from "expo-router";
 import React, { useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -21,6 +22,7 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
 };
 
 export default function Settings() {
+  const router = useRouter();
   const { colors, spacing, mode, toggleMode } = useTheme();
   const insets = useSafeAreaInsets();
   const toast = useToast();
@@ -121,6 +123,16 @@ export default function Settings() {
             toggle
             toggleValue={appLock}
             onToggle={setAppLock}
+              />
+        </Section>
+        <Section title="Developer & Diagnostics">
+          <SettingRow
+            testID="setting-local-ai-test"
+            icon="hardware-chip-outline"
+            label="Local AI Test (POC)"
+            subtitle="Test native Gemma 2B inference on-device"
+            value="Open"
+            onPress={() => router.push("/local_ai_test")}
           />
         </Section>
       </ScrollView>
