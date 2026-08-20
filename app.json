@@ -37,8 +37,18 @@
         }
       ],
       "expo-sqlite",
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraProguardRules": "-keep class com.rnllama.** { *; }"
+          }
+        }
+      ],
+      "llama.rn"
     ],
+    
     "experiments": {
       "typedRoutes": true
     }

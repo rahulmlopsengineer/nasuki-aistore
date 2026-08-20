@@ -79,7 +79,7 @@ export default function Feedback() {
         }}
       >
         <Text style={[typography.label, { color: colors.textSecondary, marginBottom: spacing.md }]}>
-          WHAT'S THIS ABOUT?
+         { "WHAT'S THIS ABOUT?"}
         </Text>
         <View style={styles.types}>
           {TYPES.map((t) => {
