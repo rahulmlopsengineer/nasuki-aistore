@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+// import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import * as Haptics from "expo-haptics";
 import React from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
@@ -64,7 +64,7 @@ const TabSlot: React.FC<{
   );
 };
 
-export const BottomNavigation: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
+export const BottomNavigation: React.FC<any> = ({ state, navigation }) => {
   const { colors, radius, shadows } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -81,7 +81,7 @@ export const BottomNavigation: React.FC<BottomTabBarProps> = ({ state, navigatio
           { backgroundColor: colors.navBg, borderRadius: radius.pill },
         ]}
       >
-        {state.routes.map((route, i) => {
+        {state.routes.map((route: any, i: number) => {
           const focused = state.index === i;
           const onPress = () => {
             if (Platform.OS !== "web") {

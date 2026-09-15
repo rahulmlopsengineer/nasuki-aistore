@@ -56,7 +56,7 @@ export const Modal: React.FC<Props> = ({ visible, onClose, title, children, test
 
 const styles = StyleSheet.create({
   backdropWrap: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
-  backdrop: { ...StyleSheet.absoluteFillObject },
+  backdrop: { ...StyleSheet.absoluteFill },
   card: { width: "100%", maxWidth: 420 },
   header: {
     flexDirection: "row",

@@ -70,7 +70,7 @@ export const BottomSheet: React.FC<Props> = ({
 
 const styles = StyleSheet.create({
   root: { flex: 1, justifyContent: "flex-end" },
-  backdropWrap: { ...StyleSheet.absoluteFillObject },
+  backdropWrap: { ...StyleSheet.absoluteFill },
   backdrop: { flex: 1 },
   sheet: { paddingTop: 12 },
   grabber: {
