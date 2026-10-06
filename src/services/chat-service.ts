@@ -1,7 +1,5 @@
 // ChatService — orchestrates the chat UI against the SQLite repositories,
-// scoped to the active user. The assistant reply is still a MOCK in Phase 2
-// (no Gemma / LLM inference yet), but both the user message and the mock
-// assistant message are PERSISTED so history survives an app restart.
+// scoped to the active user.
 
 import {
   ConversationRepository,
@@ -9,6 +7,7 @@ import {
 } from "@/src/database";
 import { Conversation, Message, MessageStatus } from "@/src/types";
 import { getActiveUserId, requireActiveUserId } from "./active-user";
+import { LocalInference, DEFAULT_MODEL_ID, SUPPORTED_MODELS, getModelPath } from "./local-inference";
 
 const CANNED = [
   "Great question! Here's a clear breakdown you can use right away.",
@@ -33,7 +32,7 @@ export const ChatService = {
   },
 
   async createConversation(modelId: string): Promise<Conversation> {
-    const userId = requireActiveUserId();
+    const userId = getActiveUserId() ?? "demo-user";
     return ConversationRepository.createConversation({ userId, modelId });
   },
 
@@ -54,13 +53,15 @@ export const ChatService = {
     status: MessageStatus = "generating",
     modelId?: string | null,
   ): Promise<Message> {
-    return MessageRepository.addMessage({
+    const msg = await MessageRepository.addMessage({
       conversationId,
       role: "assistant",
       content,
       status,
       modelId: modelId ?? null,
     });
+    console.log("[NASUKI][SERVICE] addAssistantMessage returned:", msg);
+    return msg;
   },
 
   async completeAssistantMessage(
@@ -96,9 +97,31 @@ export const ChatService = {
     await ConversationRepository.deleteConversation(id);
   },
 
-  /** MOCK assistant reply generator (placeholder for Phase 3 on-device LLM). */
+  /** MOCK assistant reply generator (placeholder). */
   generateMockReply(userContent: string): string {
     const reply = CANNED[Math.floor(Math.random() * CANNED.length)];
     return `${reply}\n\nYou asked: "${userContent.slice(0, 120)}"`;
+  },
+
+  async runLocalInference(
+    conversationId: string,
+    prompt: string,
+    onToken?: (token: string) => void
+  ): Promise<string> {
+    const convo = await this.getConversation(conversationId);
+    if (!convo) throw new Error("Conversation not found");
+
+    if (!LocalInference.isModelLoaded()) {
+      const modelDef = SUPPORTED_MODELS[DEFAULT_MODEL_ID];
+      await LocalInference.loadModel({
+        modelId: DEFAULT_MODEL_ID,
+        filename: getModelPath(modelDef.filename),
+      });
+    }
+
+    const result = await LocalInference.generate(prompt, { onToken });
+    if (result.error) throw new Error(result.error);
+
+    return result.text;
   },
 };

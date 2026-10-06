@@ -9,7 +9,7 @@ export interface Migration {
   statements: string[];
 }
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const MIGRATIONS: Migration[] = [
   {
@@ -138,6 +138,16 @@ export const MIGRATIONS: Migration[] = [
       );`,
       `CREATE INDEX IF NOT EXISTS idx_credit_tx_user
         ON credit_transactions(user_id, created_at DESC);`,
+    ],
+  },
+  {
+    version: 2,
+    statements: [
+      `ALTER TABLE conversations ADD COLUMN is_private INTEGER NOT NULL DEFAULT 0;`,
+      `ALTER TABLE conversations ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0;`,
+      `ALTER TABLE conversations ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0;`,
+      `ALTER TABLE conversations ADD COLUMN message_count INTEGER NOT NULL DEFAULT 0;`,
+      `ALTER TABLE conversations ADD COLUMN last_message TEXT NOT NULL DEFAULT '';`,
     ],
   },
 ];

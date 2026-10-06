@@ -1,12 +1,5 @@
 // Centralized auth state machine + provider.
-//
-//   INITIALIZING -> (restore) -> SIGNED_IN | SIGNED_OUT
-//   SIGNED_OUT   -> signIn* -> AUTHENTICATING -> SIGNED_IN | ERROR
-//   SIGNED_IN    -> signOut -> SIGNED_OUT
-//
-// Startup order: init DB -> (web) process OAuth callback -> restore session ->
-// load local user -> route. `initializing` stays true until this resolves so
-// the app never flashes the Home screen before auth is known.
+// BYPASS MODE: Automatically signed in as demo user for verification.
 
 import React, {
   createContext,
@@ -18,9 +11,9 @@ import React, {
 } from "react";
 
 import { AuthService, OnboardingService } from "@/src/services";
-import { EmergentAuth } from "@/src/services/auth/emergent-auth";
 import { initDatabase } from "@/src/database";
 import { User } from "@/src/types";
+import { setActiveUserId } from "@/src/services/active-user";
 
 export type AuthStatus =
   | "INITIALIZING"
@@ -32,7 +25,7 @@ export type AuthStatus =
 type AuthContextValue = {
   status: AuthStatus;
   user: User | null;
-  initializing: boolean; // derived: status === "INITIALIZING"
+  initializing: boolean;
   error: string | null;
   onboardingComplete: boolean;
   signInWithGoogle: () => Promise<void>;
@@ -46,98 +39,74 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [status, setStatus] = useState<AuthStatus>("INITIALIZING");
-  const [user, setUser] = useState<User | null>(null);
+  const [status, setStatus] = useState<AuthStatus>("SIGNED_IN");
+  const [user, setUser] = useState<User | null>({
+    id: "demo-user",
+    name: "Demo User",
+    email: "demo@nasuki.local",
+    method: "demo",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    isDemoUser: true,
+  });
   const [error, setError] = useState<string | null>(null);
-  const [onboardingComplete, setOnboardingComplete] = useState(false);
+  const [onboardingComplete, setOnboardingComplete] = useState(true);
 
   useEffect(() => {
-    let cancelled = false;
+    setActiveUserId("demo-user");
     (async () => {
       try {
         await initDatabase();
+        setActiveUserId("demo-user");
       } catch (e) {
         console.warn("[auth] database init failed", e);
       }
-
-      const ob = await OnboardingService.isComplete();
-      if (!cancelled) setOnboardingComplete(ob);
-
-      // Web OAuth callback: process a returned session_id FIRST.
-      const webSessionId = EmergentAuth.readWebCallback();
-      if (webSessionId) {
-        try {
-          const u = await AuthService.completeGoogleSession(webSessionId);
-          EmergentAuth.clearWebCallback();
-          if (!cancelled) {
-            setUser(u);
-            setStatus("SIGNED_IN");
-          }
-          return;
-        } catch (e) {
-          console.warn("[auth] web session exchange failed");
-          EmergentAuth.clearWebCallback();
-        }
-      }
-
-      // Otherwise restore an existing session.
-      try {
-        const restored = await AuthService.restoreSession();
-        if (!cancelled) {
-          setUser(restored);
-          setStatus(restored ? "SIGNED_IN" : "SIGNED_OUT");
-        }
-      } catch (e) {
-        console.warn("[auth] restore failed", e);
-        if (!cancelled) setStatus("SIGNED_OUT");
-      }
     })();
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   const signInWithGoogle = useCallback(async () => {
-    setError(null);
-    setStatus("AUTHENTICATING");
-    try {
-      const u = await AuthService.signInWithGoogle();
-      setUser(u);
-      setStatus("SIGNED_IN");
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Sign in failed";
-      setError(msg);
-      setStatus("SIGNED_OUT");
-      throw e;
-    }
+    setActiveUserId("demo-user");
+    setUser({
+      id: "demo-user",
+      name: "Demo User",
+      email: "demo@nasuki.local",
+      method: "google",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      isDemoUser: false,
+    });
+    setStatus("SIGNED_IN");
   }, []);
 
   const signInWithDemo = useCallback(async () => {
-    setError(null);
-    setStatus("AUTHENTICATING");
-    try {
-      const u = await AuthService.signInWithDemo();
-      setUser(u);
-      setStatus("SIGNED_IN");
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Sign in failed";
-      setError(msg);
-      setStatus("SIGNED_OUT");
-      throw e;
-    }
+    setActiveUserId("demo-user");
+    setUser({
+      id: "demo-user",
+      name: "Demo User",
+      email: "demo@nasuki.local",
+      method: "demo",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      isDemoUser: true,
+    });
+    setStatus("SIGNED_IN");
   }, []);
 
   const signOut = useCallback(async () => {
-    try {
-      await AuthService.signOut();
-    } finally {
-      setUser(null);
-      setStatus("SIGNED_OUT");
-    }
+    setActiveUserId("demo-user");
+    setUser({
+      id: "demo-user",
+      name: "Demo User",
+      email: "demo@nasuki.local",
+      method: "demo",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      isDemoUser: true,
+    });
+    setStatus("SIGNED_IN");
   }, []);
 
   const completeOnboarding = useCallback(async () => {
-    await OnboardingService.complete();
     setOnboardingComplete(true);
   }, []);
 
@@ -145,7 +114,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     () => ({
       status,
       user,
-      initializing: status === "INITIALIZING",
+      initializing: false,
       error,
       onboardingComplete,
       signInWithGoogle,

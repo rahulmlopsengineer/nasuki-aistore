@@ -29,20 +29,23 @@ export const CreditRepository = {
     if (existing) return existing;
     const db = getExecutor();
     const now = nowIso();
-    await db.withTransactionAsync(async () => {
+    try {
       await db.runAsync(
-        `INSERT INTO credit_wallet (user_id, balance, lifetime_earned, lifetime_spent, updated_at)
+        `INSERT OR IGNORE INTO credit_wallet (user_id, balance, lifetime_earned, lifetime_spent, updated_at)
          VALUES (?, ?, ?, 0, ?)`,
         [userId, startingBalance, startingBalance, now],
       );
-      if (startingBalance > 0) {
+      const txs = await this.listTransactions(userId, { limit: 1 });
+      if (txs.length === 0 && startingBalance > 0) {
         await db.runAsync(
           `INSERT INTO credit_transactions (id, user_id, type, amount, feature, reference_id, label, created_at)
            VALUES (?, ?, 'BONUS', ?, NULL, NULL, ?, ?)`,
           [uid("tx"), userId, startingBalance, "Welcome bonus", now],
         );
       }
-    });
+    } catch (e) {
+      console.warn("[credit] ensureWallet error:", e);
+    }
     const wallet = await this.getWallet(userId);
     if (!wallet) throw new Error("Failed to create wallet");
     return wallet;

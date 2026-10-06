@@ -38,8 +38,14 @@ export default function ChatHistory() {
   const [renameText, setRenameText] = useState("");
 
   const load = useCallback(async () => {
-    setItems(await ChatService.listConversations());
-    setLoading(false);
+    try {
+      setItems(await ChatService.listConversations());
+    } catch (e) {
+      console.error("[NASUKI][CHAT] Failed to load conversations:", e);
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useFocusEffect(
@@ -59,9 +65,14 @@ export default function ChatHistory() {
   );
 
   const newChat = async () => {
-    const models = await ModelService.listModels();
-    const convo = await ChatService.createConversation(models[0]?.id ?? "mdl-gamma");
-    router.push(`/chat/${convo.id}`);
+    try {
+      const models = await ModelService.listModels();
+      const convo = await ChatService.createConversation(models[0]?.id ?? "mdl-gamma");
+      router.push(`/chat/${convo.id}` as any);
+    } catch (e) {
+      console.error("[NASUKI][CHAT] Failed to create new chat:", e);
+      toast.show("Could not create conversation", "error");
+    }
   };
 
   const doPin = async () => {

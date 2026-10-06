@@ -13,7 +13,7 @@ import {
   ScreenContainer,
   Touchable,
 } from "@/src/components/ui";
-import { ChatService } from "@/src/services";
+import { ChatService, LocalInference, DEFAULT_MODEL_ID, SUPPORTED_MODELS, getModelPath } from "@/src/services";
 import { Message } from "@/src/types";
 import { useTheme } from "@/src/theme";
 
@@ -23,10 +23,28 @@ const SUGGESTIONS = [
   "Explain like I'm five",
 ];
 
+const MAX_CTX_TOKENS = 200;
+
+function buildContextPrompt(messages: Message[], currentUserMessage: string): string {
+  // Approximate 4 chars per token; budget ~147 tokens input, ~45 tokens reserved output
+  const budgetChars = (MAX_CTX_TOKENS - 45) * 4;
+  let historyStr = "";
+  const recentMessages = messages.slice(-6); // last 3 turns
+  for (const m of recentMessages) {
+    const roleLabel = m.role === "user" ? "User" : "Assistant";
+    const line = `${roleLabel}: ${m.content}\n`;
+    if ((historyStr + line).length > budgetChars) break;
+    historyStr = line + historyStr;
+  }
+  console.log(`[NASUKI][CONTEXT] Context limit: ${MAX_CTX_TOKENS}, Estimated input chars: ${historyStr.length + currentUserMessage.length}`);
+  return `System: You are NASUKI, a helpful on-device AI assistant.\n${historyStr}User: ${currentUserMessage}\nAssistant:`;
+}
+
 export default function ChatConversation() {
   const { colors, spacing, typography, radius } = useTheme();
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const searchParams = useLocalSearchParams<{ id: string }>();
+  const id = Array.isArray(searchParams.id) ? searchParams.id[0] : (searchParams.id || "cnv-default");
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [title, setTitle] = useState("New chat");
@@ -34,11 +52,11 @@ export default function ChatConversation() {
   const [modelLoading, setModelLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const listRef = useRef<FlatList<Message>>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const generatingId = useRef<string | null>(null);
+  const accumulatedContent = useRef<string>("");
 
   const subtitle = useMemo(
-    () => (modelLoading ? "Model loading…" : "Gamma · on-device"),
+    () => (modelLoading ? "Model loading…" : "Gemma 2 2B · on-device"),
     [modelLoading],
   );
 
@@ -48,11 +66,26 @@ export default function ChatConversation() {
       if (convo) setTitle(convo.title);
       const existing = await ChatService.getMessages(id);
       setMessages(existing);
-      setTimeout(() => setModelLoading(false), 700); // simulate model warmup
+      setModelLoading(false); // Unblock UI immediately so conversation opens instantly
+
+      // Initialize local inference model in background if not loaded
+      try {
+        if (!LocalInference.isModelLoaded()) {
+          console.log("[NASUKI][CHAT] Loading local model in background...");
+          const modelDef = SUPPORTED_MODELS[DEFAULT_MODEL_ID];
+          LocalInference.loadModel({
+            modelId: DEFAULT_MODEL_ID,
+            filename: getModelPath(modelDef.filename),
+          }).then((res) => {
+            if (!res.success) {
+              console.error("[NASUKI][CHAT] Background model load failed:", res.error);
+            }
+          });
+        }
+      } catch (e) {
+        console.error("[NASUKI][CHAT] Model load error:", e);
+      }
     })();
-    return () => {
-      if (timer.current) clearTimeout(timer.current);
-    };
   }, [id]);
 
   const scrollToEnd = useCallback(() => {
@@ -63,57 +96,131 @@ export default function ChatConversation() {
     async (value: string) => {
       const content = value.trim();
       if (!content || generating) return;
+      console.log("[NASUKI][CHAT][1] SEND_PRESSED");
+      console.log("[NASUKI][CHAT][2] USER_PROMPT_RECEIVED:", content);
       setText("");
       setGenerating(true);
 
-      // Persist the user message + a generating assistant placeholder.
-      const userMsg = await ChatService.addUserMessage(id, content);
-      const assistantMsg = await ChatService.addAssistantMessage(id, "", "generating");
-      generatingId.current = assistantMsg.id;
-      setMessages((prev) => [...prev, userMsg, assistantMsg]);
-      scrollToEnd();
+      let assistantMsgId: string | null = null;
 
-      // MOCK reply (Phase 2 has no on-device LLM yet) — persisted on completion.
-      timer.current = setTimeout(async () => {
-        const reply = ChatService.generateMockReply(content);
-        await ChatService.completeAssistantMessage(id, assistantMsg.id, reply, "completed");
+      try {
+        // Persist user message + generating assistant placeholder
+        const userMsg = await ChatService.addUserMessage(id, content);
+        console.log("[NASUKI][CHAT][3] USER_MESSAGE_SAVED:", userMsg.id);
+
+        let assistantMsg = await ChatService.addAssistantMessage(id, "", "generating");
+        if (!assistantMsg || !assistantMsg.id) {
+          console.warn("[NASUKI][CHAT] Fallback assistant placeholder constructed");
+          assistantMsg = {
+            id: `m-asst-${Date.now()}`,
+            conversationId: id,
+            role: "assistant",
+            content: "",
+            status: "generating",
+            state: "generating",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+        }
+        assistantMsgId = assistantMsg.id;
+        generatingId.current = assistantMsg.id;
+        accumulatedContent.current = "";
+
+        setMessages((prev) => [...prev, userMsg, assistantMsg]);
+        scrollToEnd();
+
+        // Ensure model is loaded before generating
+        console.log("[NASUKI][CHAT][4] ENSURE_MODEL_READY");
+        if (!LocalInference.isModelLoaded()) {
+          console.log("[NASUKI][CHAT] Model loading before generation...");
+          const modelDef = SUPPORTED_MODELS[DEFAULT_MODEL_ID];
+          const res = await LocalInference.loadModel({
+            modelId: DEFAULT_MODEL_ID,
+            filename: getModelPath(modelDef.filename),
+          });
+          if (!res.success) {
+            throw new Error(res.error || "Model load failed");
+          }
+        }
+        console.log("[NASUKI][CHAT][5] MODEL_READY");
+
+        const prompt = buildContextPrompt(messages, content);
+        console.log("[NASUKI][CHAT] Generation prompt:\n" + prompt);
+        console.log("[NASUKI][CHAT][6] GENERATE_CALLED");
+
+        const result = await LocalInference.generate(prompt, {
+          maxTokens: 128,
+          onToken: (token) => {
+            if (!generatingId.current) return;
+            accumulatedContent.current += token;
+            const currentText = accumulatedContent.current;
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMsg.id ? { ...m, content: currentText } : m,
+              ),
+            );
+            scrollToEnd();
+          },
+        });
+
+        if (result.error) {
+          throw new Error(result.error);
+        }
+
+        const finalContent = (result.text || accumulatedContent.current).trim();
+        await ChatService.completeAssistantMessage(id, assistantMsg.id, finalContent, "completed");
+        console.log("[NASUKI][CHAT][12] ASSISTANT_MESSAGE_SAVED");
+
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsg.id
-              ? { ...m, content: reply, state: "completed", status: "completed" }
+              ? { ...m, content: finalContent, state: "completed", status: "completed" }
               : m,
           ),
         );
+        console.log("[NASUKI][CHAT][13] UI_UPDATED");
+        console.log("[NASUKI][CHAT] Generation completed. Tokens:", result.metrics.tokenCount, "Speed:", result.metrics.tokensPerSec?.toFixed(2), "tok/s");
+      } catch (e: any) {
+        console.error("[NASUKI][CHAT] Generation error:", e);
+        const partial = accumulatedContent.current.trim() || "Inference error occurred.";
+        if (assistantMsgId) {
+          await ChatService.completeAssistantMessage(id, assistantMsgId, partial, "completed");
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId
+                ? { ...m, content: partial, state: "completed", status: "completed" }
+                : m,
+            ),
+          );
+        }
+      } finally {
         generatingId.current = null;
         setGenerating(false);
+        console.log("[NASUKI][CHAT][14] SEND_COMPLETE");
         scrollToEnd();
-      }, 1400);
+      }
     },
-    [generating, id, scrollToEnd],
+    [generating, id, messages, scrollToEnd],
   );
 
   const stop = useCallback(async () => {
-    if (timer.current) clearTimeout(timer.current);
+    console.log("[NASUKI][CHAT] Generation stop requested.");
+    await LocalInference.stopGeneration();
     const genId = generatingId.current;
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.state === "generating"
-          ? { ...m, content: m.content || "Stopped.", state: "stopped" }
-          : m,
-      ),
-    );
     setGenerating(false);
+
     if (genId) {
-      const current = messages.find((m) => m.id === genId);
-      await ChatService.completeAssistantMessage(
-        id,
-        genId,
-        current?.content || "Stopped.",
-        "completed",
+      const currentText = accumulatedContent.current.trim() || "Stopped.";
+      await ChatService.completeAssistantMessage(id, genId, currentText, "completed");
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === genId ? { ...m, content: currentText, state: "stopped", status: "completed" } : m,
+        ),
       );
       generatingId.current = null;
     }
-  }, [id, messages]);
+    scrollToEnd();
+  }, [id, scrollToEnd]);
 
   return (
     <ScreenContainer testID="chat-conversation">

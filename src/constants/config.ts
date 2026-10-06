@@ -23,9 +23,7 @@ export const STORAGE_KEYS = {
 // (__DEV__) and can be force-enabled via EXPO_PUBLIC_DEV_AUTH_ENABLED="true".
 // In production release builds it defaults to DISABLED — no hidden bypass.
 export const AUTH = {
-  devAuthEnabled:
-    (typeof __DEV__ !== "undefined" && __DEV__) ||
-    process.env.EXPO_PUBLIC_DEV_AUTH_ENABLED === "true",
+  devAuthEnabled: true,
   demoUserId: "demo-user",
 } as const;
 

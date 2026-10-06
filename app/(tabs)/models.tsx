@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { TAB_BAR_SPACE } from "@/src/components/navigation/BottomNavigation";
 import {
+  Button,
   ErrorState,
   LoadingIndicator,
   ModelCard,
@@ -138,6 +139,12 @@ export default function ModelStore() {
             gap: spacing.md,
           }}
         >
+          <Button
+            label="Open Local AI Test"
+            onPress={() => router.push("/local_ai_test" as any)}
+            variant="outline"
+            style={{ marginBottom: spacing.sm }}
+          />
           {visible.map((m) => (
             <ModelCard
               key={m.id}

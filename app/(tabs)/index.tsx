@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { TAB_BAR_SPACE } from "@/src/components/navigation/BottomNavigation";
 import {
+  Button,
   Card,
   IconButton,
   LoadingIndicator,
@@ -35,15 +36,20 @@ export default function Home() {
   const [installs, setInstalls] = useState<Record<string, InstalledModel>>({});
 
   const load = useCallback(async () => {
-    const [w, m, states] = await Promise.all([
-      CreditService.getWallet(),
-      ModelService.listModels(),
-      ModelService.listInstallStates(),
-    ]);
-    setWallet(w);
-    setModels(m);
-    setInstalls(Object.fromEntries(states.map((s) => [s.modelId, s])));
-    setLoading(false);
+    try {
+      const [w, m, states] = await Promise.all([
+        CreditService.getWallet(),
+        ModelService.listModels(),
+        ModelService.listInstallStates(),
+      ]);
+      setWallet(w);
+      setModels(m);
+      setInstalls(Object.fromEntries(states.map((s) => [s.modelId, s])));
+    } catch (e) {
+      console.error("[NASUKI][HOME] Failed to load workspace:", e);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -100,6 +106,12 @@ export default function Home() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
           }
         >
+          <Button
+            label="Open Local AI Test"
+            onPress={() => router.push("/local_ai_test" as any)}
+            variant="outline"
+            style={{ marginBottom: spacing.md }}
+          />
           {/* Credit balance pill */}
           <Animated.View entering={FadeInDown.duration(300)}>
             <Touchable

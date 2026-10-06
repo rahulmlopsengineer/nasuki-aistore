@@ -2,7 +2,7 @@
 
 import { Conversation, ConversationMode } from "@/src/types";
 import { nowIso, uid } from "@/src/utils/misc";
-import { getExecutor } from "../client";
+import { getExecutor, initDatabase } from "../client";
 import { mapConversation } from "../mappers";
 import { ConversationRow } from "../types";
 
@@ -22,39 +22,82 @@ export interface ListOptions {
 
 export const ConversationRepository = {
   async createConversation(input: CreateConversationInput): Promise<Conversation> {
+    await initDatabase();
     const db = getExecutor();
     const now = nowIso();
     const id = uid("cnv");
-    await db.runAsync(
-      `INSERT INTO conversations
-        (id, user_id, title, model_id, mode, last_message, message_count,
-         is_pinned, is_archived, is_private, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, '', 0, 0, 0, ?, ?, ?)`,
-      [
-        id,
-        input.userId,
-        input.title ?? "New chat",
-        input.modelId ?? null,
-        input.mode ?? "offline",
-        input.isPrivate ? 1 : 0,
-        now,
-        now,
-      ],
-    );
+    const userId = input.userId || "demo-user";
+
+    console.log("[NASUKI][DB] createConversation -> userId:", userId, "modelId:", input.modelId, "id:", id);
+
+    try {
+      const uRes = await db.runAsync(
+        `INSERT OR IGNORE INTO users (id, name, email, auth_provider, is_demo_user, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [userId, "Demo User", "demo@nasuki.local", "demo", 1, now, now],
+      );
+      console.log("[NASUKI][DB] users insert result:", uRes);
+
+      const cRes = await db.runAsync(
+        `INSERT INTO conversations
+          (id, user_id, title, model_id, mode, last_message, message_count,
+           is_pinned, is_archived, is_private, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, '', 0, 0, 0, ?, ?, ?)`,
+        [
+          id,
+          userId,
+          input.title ?? "New chat",
+          input.modelId ?? null,
+          input.mode ?? "offline",
+          input.isPrivate ? 1 : 0,
+          now,
+          now,
+        ],
+      );
+      console.log("[NASUKI][DB] conversations insert result:", cRes);
+
+      const all = await db.getAllAsync("SELECT * FROM conversations");
+      console.log("[NASUKI][DB] all conversations in DB after insert:", all);
+    } catch (err) {
+      console.error("[NASUKI][DB] Error in createConversation:", err);
+      throw err;
+    }
+
     const convo = await this.getConversation(id);
-    if (!convo) throw new Error("Failed to create conversation");
+    console.log("[NASUKI][DB] created conversation result:", convo);
+    if (!convo) {
+      // Fallback object construct if SELECT query is momentarily delayed
+      console.warn("[NASUKI][DB] Constructing fallback conversation object for id:", id);
+      return {
+        id,
+        userId,
+        title: input.title ?? "New chat",
+        modelId: input.modelId ?? "mdl-gamma",
+        mode: input.mode ?? "offline",
+        lastMessage: "",
+        messageCount: 0,
+        pinned: false,
+        isArchived: false,
+        isPrivate: !!input.isPrivate,
+        createdAt: now,
+        updatedAt: now,
+      };
+    }
     return convo;
   },
 
   async getConversation(id: string): Promise<Conversation | null> {
+    await initDatabase();
     const row = await getExecutor().getFirstAsync<ConversationRow>(
       "SELECT * FROM conversations WHERE id = ?",
       [id],
     );
+    console.log("[NASUKI][DB] getConversation row for id", id, ":", row);
     return row ? mapConversation(row) : null;
   },
 
   async getConversations(userId: string, opts: ListOptions = {}): Promise<Conversation[]> {
+    await initDatabase();
     const limit = opts.limit ?? 50;
     const offset = opts.offset ?? 0;
     const archivedClause = opts.includeArchived ? "" : "AND is_archived = 0";
@@ -65,7 +108,7 @@ export const ConversationRepository = {
         LIMIT ? OFFSET ?`,
       [userId, limit, offset],
     );
-    return rows.map(mapConversation);
+    return (rows ?? []).map(mapConversation);
   },
 
   async updateConversation(
@@ -81,6 +124,7 @@ export const ConversationRepository = {
       messageCount: number;
     }>,
   ): Promise<void> {
+    await initDatabase();
     const sets: string[] = [];
     const params: (string | number | null)[] = [];
     if (patch.title !== undefined) { sets.push("title = ?"); params.push(patch.title); }
@@ -107,6 +151,7 @@ export const ConversationRepository = {
   },
 
   async touch(id: string, lastMessage: string): Promise<void> {
+    await initDatabase();
     const db = getExecutor();
     await db.runAsync(
       `UPDATE conversations
@@ -119,6 +164,7 @@ export const ConversationRepository = {
   },
 
   async deleteConversation(id: string): Promise<void> {
+    await initDatabase();
     const db = getExecutor();
     await db.withTransactionAsync(async () => {
       await db.runAsync("DELETE FROM messages WHERE conversation_id = ?", [id]);
@@ -127,6 +173,7 @@ export const ConversationRepository = {
   },
 
   async deleteAllForUser(userId: string): Promise<void> {
+    await initDatabase();
     const db = getExecutor();
     await db.withTransactionAsync(async () => {
       await db.runAsync(

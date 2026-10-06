@@ -44,8 +44,14 @@ export default function RagDocuments() {
   const [uploading, setUploading] = useState(false);
 
   const load = useCallback(async () => {
-    setDocs(await DocumentService.listDocuments());
-    setLoading(false);
+    try {
+      setDocs(await DocumentService.listDocuments());
+    } catch (e) {
+      console.error("[NASUKI][DOCS] Failed to load documents:", e);
+      setDocs([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useFocusEffect(

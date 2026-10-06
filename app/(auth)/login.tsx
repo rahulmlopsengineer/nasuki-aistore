@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -20,13 +20,16 @@ export default function Login() {
   const [busy, setBusy] = useState<null | "google" | "demo">(null);
 
   const run = async (which: "google" | "demo") => {
+    console.log("[NASUKI][LOGIN] run clicked:", which);
     if (busy) return;
     setBusy(which);
     try {
       if (which === "google") await signInWithGoogle();
       else await signInWithDemo();
+      console.log("[NASUKI][LOGIN] Sign in successful, navigating to /(tabs)");
       router.replace("/(tabs)");
-    } catch {
+    } catch (e) {
+      console.error("[NASUKI][LOGIN] Sign in error:", e);
       toast.show("Sign in failed. Please try again.", "error");
       setBusy(null);
     }
@@ -72,22 +75,27 @@ export default function Login() {
             </Text>
           </Touchable>
 
-          <Touchable
+          <TouchableOpacity
             testID="login-demo-button"
             onPress={() => run("demo")}
             disabled={busy !== null || !AUTH.devAuthEnabled}
-            haptic={false}
             style={{
-              marginTop: spacing.lg,
+              marginTop: spacing.xl,
+              paddingVertical: 14,
+              paddingHorizontal: 28,
               alignSelf: "center",
+              backgroundColor: colors.card,
+              borderRadius: radius.md,
+              borderWidth: 1,
+              borderColor: colors.cardBorder,
               opacity: AUTH.devAuthEnabled ? 1 : 0,
             }}
             accessibilityLabel="Continue as demo"
           >
-            <Text style={[typography.bodyStrong, { color: colors.textSecondary }]}>
+            <Text style={[typography.bodyStrong, { color: colors.text }]}>
               {busy === "demo" ? "Loading…" : "Continue as demo (dev)"}
             </Text>
-          </Touchable>
+          </TouchableOpacity>
         </View>
 
         <Text

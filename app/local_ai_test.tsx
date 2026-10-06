@@ -18,13 +18,13 @@ import {
   ScreenContainer,
 } from "@/src/components/ui";
 import {
-  DEFAULT_MODEL_FILENAME,
-  getDefaultModelPath,
-  LocalInferencePOC,
-  POCErrorCode,
-  POCMetrics,
-  POCModelStatus,
-} from "@/src/services/local-inference-poc";
+  LocalInference,
+  ModelStatus,
+  InferenceMetrics,
+  LocalAIErrorCode,
+  SUPPORTED_MODELS,
+  DEFAULT_MODEL_ID,
+} from "@/src/services/local-inference";
 import { useTheme } from "@/src/theme";
 import { formatSize } from "@/src/utils/format";
 
@@ -33,31 +33,46 @@ const TEST_PROMPT = "Explain gravity in one short sentence.";
 export default function LocalAITestScreen() {
   const { colors, spacing, typography, radius } = useTheme();
   const insets = useSafeAreaInsets();
-  const [modelPath, setModelPath] = useState(getDefaultModelPath());
+
+  const modelDef = SUPPORTED_MODELS[DEFAULT_MODEL_ID];
+  const [modelFilename, setModelFilename] = useState(modelDef.filename);
+
+  const getPlatformModelPath = useCallback(() => {
+    if (Platform.OS === "web") return modelFilename;
+    // On Android, use the private models directory
+    const { getModelDirectory } = require("@/src/services/local-inference-poc");
+    return `${getModelDirectory()}${modelFilename}`;
+  }, [modelFilename]);
+
   const [fileExists, setFileExists] = useState<boolean | null>(null);
   const [fileSizeBytes, setFileSizeBytes] = useState<number | null>(null);
-  const [status, setStatus] = useState<POCModelStatus>("UNLOADED");
+  const [status, setStatus] = useState<ModelStatus>("IDLE");
   const [loadProgress, setLoadProgress] = useState<number>(0);
   const [output, setOutput] = useState<string>("");
-  const [metrics, setMetrics] = useState<POCMetrics | null>(null);
+  const [metrics, setMetrics] = useState<InferenceMetrics | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [errorCode, setErrorCode] = useState<POCErrorCode | null>(null);
+  const [errorCode, setErrorCode] = useState<LocalAIErrorCode | null>(null);
 
   const checkFile = useCallback(async () => {
     setErrorMessage(null);
     setErrorCode(null);
-    const result = await LocalInferencePOC.checkModelFile(modelPath);
+    const result = await LocalInference.checkModelAvailable({
+      modelId: modelDef.id,
+      filename: getPlatformModelPath()
+    });
     setFileExists(result.exists);
     setFileSizeBytes(result.sizeBytes || null);
+
     if (!result.exists && Platform.OS !== "web") {
       setErrorMessage(
-        `Model file not found at:\n${result.path}\n\nTo test, push the model file to your Android device using ADB:\nadb push gemma-2-2b-it-Q4_K_M.gguf /sdcard/Download/`
+        `Model file not found at local storage. To test, push the model file to your Android device using ADB.`
       );
     }
-  }, [modelPath]);
+  }, [modelFilename, modelDef]);
 
   useEffect(() => {
     checkFile();
+    setStatus(LocalInference.getStatus());
   }, [checkFile]);
 
   const handleLoadModel = useCallback(async () => {
@@ -65,27 +80,32 @@ export default function LocalAITestScreen() {
     setErrorCode(null);
     setStatus("LOADING");
     setLoadProgress(0);
-    const result = await LocalInferencePOC.loadModel(modelPath, (p) => {
-      setLoadProgress(p);
+
+    const result = await LocalInference.loadModel({
+      modelId: modelDef.id,
+      filename: getPlatformModelPath(),
+      onProgress: (p) => setLoadProgress(p)
     });
+
     if (result.success) {
       setStatus("READY");
-      setMetrics((prev) => ({ ...prev, loadTimeMs: result.loadTimeMs }));
     } else {
       setStatus("ERROR");
       setErrorMessage(result.error || "Unknown load error");
-      setErrorCode(result.errorCode || "MODEL_LOAD_FAILED");
+      setErrorCode("MODEL_LOAD_FAILED");
     }
-  }, [modelPath]);
+  }, [modelFilename, modelDef]);
 
   const handleRunInference = useCallback(async () => {
     setErrorMessage(null);
     setErrorCode(null);
     setOutput("");
     setStatus("GENERATING");
-    const result = await LocalInferencePOC.generate(TEST_PROMPT, (token) => {
-      setOutput((prev) => prev + token);
+
+    const result = await LocalInference.generate(TEST_PROMPT, {
+      onToken: (token) => setOutput((prev) => prev + token)
     });
+
     if (result.error) {
       setStatus("ERROR");
       setErrorMessage(result.error);
@@ -93,16 +113,13 @@ export default function LocalAITestScreen() {
     } else {
       setStatus("READY");
       setOutput(result.text);
-      setMetrics((prev) => ({
-        ...prev,
-        ...result.metrics,
-      }));
+      setMetrics(result.metrics);
     }
   }, []);
 
   const handleReleaseModel = useCallback(async () => {
-    await LocalInferencePOC.releaseModel();
-    setStatus("UNLOADED");
+    await LocalInference.unloadModel();
+    setStatus("IDLE");
     setOutput("");
     setMetrics(null);
     setErrorMessage(null);
@@ -169,13 +186,13 @@ export default function LocalAITestScreen() {
             />
           </View>
           <Text style={[typography.caption, { color: colors.textSecondary, marginTop: spacing.sm }]}>
-            File: {DEFAULT_MODEL_FILENAME}
+            File: {modelFilename}
             {fileSizeBytes ? ` (${formatSize(Math.round(fileSizeBytes / (1024 * 1024)))})` : ""}
           </Text>
           <View style={[styles.pathBox, { backgroundColor: colors.cardBorder }]}>
             <TextInput
-              value={modelPath}
-              onChangeText={setModelPath}
+              value={modelFilename}
+              onChangeText={setModelFilename}
               placeholder="Model file path..."
               placeholderTextColor={colors.textTertiary}
               style={[typography.caption, { color: colors.text, paddingVertical: 4 }]}
@@ -203,19 +220,19 @@ export default function LocalAITestScreen() {
               tone={
                 status === "READY"
                   ? "success"
-                  : status === "GENERATING" || status === "LOADING"
+                  : ["GENERATING", "LOADING", "WARMING_UP", "DOWNLOADING", "VERIFYING"].includes(status)
                   ? "accent"
-                  : status === "ERROR"
+                  : status === "ERROR" || status === "FAILED"
                   ? "danger"
                   : "neutral"
               }
             />
           </View>
-          {status === "LOADING" && (
+          {["LOADING", "DOWNLOADING", "WARMING_UP"].includes(status) && (
             <View style={[styles.rowAlign, { marginTop: spacing.md }]}>
               <ActivityIndicator color={colors.accent} size="small" />
               <Text style={[typography.body, { color: colors.textSecondary, marginLeft: spacing.md }]}>
-                Initializing llama.cpp context... {loadProgress > 0 ? `${Math.round(loadProgress * 100)}%` : ""}
+                {status === "DOWNLOADING" ? "Downloading model weights..." : "Initializing native engine..."} {loadProgress > 0 ? `${Math.round(loadProgress * 100)}%` : ""}
               </Text>
             </View>
           )}
@@ -224,7 +241,7 @@ export default function LocalAITestScreen() {
               label="1. Load Model"
               variant="solid"
               icon="hardware-chip-outline"
-              disabled={isWeb || status === "LOADING" || status === "GENERATING"}
+              disabled={["LOADING", "GENERATING", "DOWNLOADING", "WARMING_UP"].includes(status)}
               onPress={handleLoadModel}
             />
             <Button
@@ -238,7 +255,7 @@ export default function LocalAITestScreen() {
               label="3. Release Model"
               variant="outline"
               icon="trash-outline"
-              disabled={status === "UNLOADED" || status === "LOADING"}
+              disabled={status === "IDLE" || status === "LOADING"}
               onPress={handleReleaseModel}
             />
           </View>
@@ -300,7 +317,7 @@ export default function LocalAITestScreen() {
               <View style={styles.metricItem}>
                 <Text style={[typography.caption, { color: colors.textSecondary }]}>First Token</Text>
                 <Text style={[typography.bodyStrong, { color: colors.text }]}>
-                  {metrics.firstTokenTimeMs ? `${metrics.firstTokenTimeMs} ms` : "—"}
+                  {metrics.firstTokenLatencyMs ? `${metrics.firstTokenLatencyMs} ms` : "—"}
                 </Text>
               </View>
               <View style={styles.metricItem}>
@@ -322,9 +339,9 @@ export default function LocalAITestScreen() {
                 </Text>
               </View>
               <View style={styles.metricItem}>
-                <Text style={[typography.caption, { color: colors.textSecondary }]}>Context</Text>
+                <Text style={[typography.caption, { color: colors.textSecondary }]}>Tokens</Text>
                 <Text style={[typography.bodyStrong, { color: colors.text }]}>
-                  {metrics.contextSize ?? 1024}
+                  {metrics.tokenCount ?? 200}
                 </Text>
               </View>
             </View>

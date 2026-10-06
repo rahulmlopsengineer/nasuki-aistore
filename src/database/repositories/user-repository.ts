@@ -31,8 +31,24 @@ export const UserRepository = {
   async upsert(input: UpsertUserInput): Promise<UserRow> {
     const db = getExecutor();
     const now = nowIso();
-    const existing = await this.getById(input.id);
-    if (existing) {
+    try {
+      // 1. Insert ignore if not exists (preserves created_at)
+      await db.runAsync(
+        `INSERT OR IGNORE INTO users (id, remote_id, name, email, profile_image, auth_provider,
+         is_demo_user, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          input.id,
+          input.remoteId ?? null,
+          input.name,
+          input.email ?? null,
+          input.profileImage ?? null,
+          input.authProvider,
+          input.isDemoUser ? 1 : 0,
+          now,
+          now,
+        ],
+      );
+      // 2. Update fields
       await db.runAsync(
         `UPDATE users SET remote_id = ?, name = ?, email = ?, profile_image = ?,
          auth_provider = ?, is_demo_user = ?, updated_at = ? WHERE id = ?`,
@@ -47,22 +63,9 @@ export const UserRepository = {
           input.id,
         ],
       );
-    } else {
-      await db.runAsync(
-        `INSERT INTO users (id, remote_id, name, email, profile_image, auth_provider,
-         is_demo_user, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          input.id,
-          input.remoteId ?? null,
-          input.name,
-          input.email ?? null,
-          input.profileImage ?? null,
-          input.authProvider,
-          input.isDemoUser ? 1 : 0,
-          now,
-          now,
-        ],
-      );
+    } catch (err) {
+      console.error("[NASUKI][DB] UserRepository.upsert SQL error:", err);
+      throw err;
     }
     const row = await this.getById(input.id);
     if (!row) throw new Error("Failed to upsert user");

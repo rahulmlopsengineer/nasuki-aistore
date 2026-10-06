@@ -1,9 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-// import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import * as Haptics from "expo-haptics";
 import React from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
-import Animated, { useAnimatedStyle, useDerivedValue, withSpring } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useTheme } from "@/src/theme";
@@ -28,11 +26,10 @@ const TabSlot: React.FC<{
   const { colors, shadows } = useTheme();
   const conf = ICONS[routeName];
 
-  const lift = useDerivedValue(() => withSpring(focused ? 1 : 0, { damping: 16, stiffness: 180 }));
-  const bubbleStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: -22 * lift.value }, { scale: 0.85 + 0.15 * lift.value }],
-    opacity: lift.value,
-  }));
+  const bubbleStyle = {
+    transform: [{ translateY: focused ? -18 : 0 }, { scale: focused ? 1 : 0.85 }],
+    opacity: focused ? 1 : 0,
+  };
 
   return (
     <Pressable
@@ -44,17 +41,19 @@ const TabSlot: React.FC<{
       accessibilityLabel={conf?.label ?? routeName}
     >
       {/* Floating raised circle for the active tab */}
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.bubble,
-          shadows.md,
-          { backgroundColor: colors.navActiveBg },
-          bubbleStyle,
-        ]}
-      >
-        <Ionicons name={conf?.on ?? "ellipse"} size={24} color={colors.navActiveIcon} />
-      </Animated.View>
+      {focused && (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.bubble,
+            shadows.md,
+            { backgroundColor: colors.navActiveBg },
+            bubbleStyle,
+          ]}
+        >
+          <Ionicons name={conf?.on ?? "ellipse"} size={24} color={colors.navActiveIcon} />
+        </View>
+      )}
 
       {/* Inactive icon sitting inside the bar */}
       {!focused && (

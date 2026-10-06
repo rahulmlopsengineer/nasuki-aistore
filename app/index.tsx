@@ -19,13 +19,13 @@ export default function Splash() {
       if (!onboardingComplete) router.replace("/(auth)/onboarding");
       else if (!user) router.replace("/(auth)/login");
       else router.replace("/(tabs)");
-    }, 1400);
+    }, 200);
     return () => clearTimeout(t);
   }, [initializing, user, onboardingComplete, router]);
 
   return (
     <View testID="splash-screen" style={[styles.root, { backgroundColor: colors.background }]}>
-      <Animated.View entering={FadeIn.duration(500)} style={styles.center}>
+      <Animated.View entering={FadeIn.duration(300)} style={styles.center}>
         <Logo size={128} />
         <Text
           style={[
@@ -45,7 +45,7 @@ export default function Splash() {
       </Animated.View>
 
       <Animated.Text
-        entering={FadeInUp.delay(400).duration(500)}
+        entering={FadeInUp.delay(200).duration(300)}
         style={[typography.small, styles.version, { color: colors.textSecondary }]}
       >
         Version {APP.version}
