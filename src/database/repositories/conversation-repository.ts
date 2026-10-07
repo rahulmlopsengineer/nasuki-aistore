@@ -122,6 +122,8 @@ export const ConversationRepository = {
       isPrivate: boolean;
       lastMessage: string;
       messageCount: number;
+      summary: string | null;
+      summaryUpdatedAt: string | null;
     }>,
   ): Promise<void> {
     await initDatabase();
@@ -135,11 +137,18 @@ export const ConversationRepository = {
     if (patch.isPrivate !== undefined) { sets.push("is_private = ?"); params.push(patch.isPrivate ? 1 : 0); }
     if (patch.lastMessage !== undefined) { sets.push("last_message = ?"); params.push(patch.lastMessage); }
     if (patch.messageCount !== undefined) { sets.push("message_count = ?"); params.push(patch.messageCount); }
+    if (patch.summary !== undefined) { sets.push("summary = ?"); params.push(patch.summary); }
+    if (patch.summaryUpdatedAt !== undefined) { sets.push("summary_updated_at = ?"); params.push(patch.summaryUpdatedAt); }
     if (!sets.length) return;
     sets.push("updated_at = ?");
     params.push(nowIso());
     params.push(id);
     await getExecutor().runAsync(`UPDATE conversations SET ${sets.join(", ")} WHERE id = ?`, params);
+  },
+
+  async saveSummary(id: string, summary: string): Promise<void> {
+    const now = nowIso();
+    await this.updateConversation(id, { summary, summaryUpdatedAt: now });
   },
 
   async renameConversation(id: string, title: string): Promise<void> {

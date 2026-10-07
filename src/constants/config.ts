@@ -6,6 +6,16 @@ export const APP = {
   version: "1.0",
 } as const;
 
+// Prototype / Demo mode configuration
+export const PROTOTYPE_MODE = true;
+
+export const FEATURES = {
+  monetization: false,
+  credits: false,
+  ads: false,
+  billing: false,
+} as const;
+
 export const STORAGE_KEYS = {
   onboardingComplete: "nasuki.onboarding.complete",
   authUser: "nasuki.auth.user",

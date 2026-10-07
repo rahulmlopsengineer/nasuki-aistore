@@ -9,7 +9,7 @@ export interface Migration {
   statements: string[];
 }
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const MIGRATIONS: Migration[] = [
   {
@@ -42,6 +42,8 @@ export const MIGRATIONS: Migration[] = [
         is_pinned INTEGER NOT NULL DEFAULT 0,
         is_archived INTEGER NOT NULL DEFAULT 0,
         is_private INTEGER NOT NULL DEFAULT 0,
+        summary TEXT,
+        summary_updated_at TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );`,
@@ -148,6 +150,13 @@ export const MIGRATIONS: Migration[] = [
       `ALTER TABLE conversations ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0;`,
       `ALTER TABLE conversations ADD COLUMN message_count INTEGER NOT NULL DEFAULT 0;`,
       `ALTER TABLE conversations ADD COLUMN last_message TEXT NOT NULL DEFAULT '';`,
+    ],
+  },
+  {
+    version: 3,
+    statements: [
+      `ALTER TABLE conversations ADD COLUMN summary TEXT;`,
+      `ALTER TABLE conversations ADD COLUMN summary_updated_at TEXT;`,
     ],
   },
 ];

@@ -63,6 +63,8 @@ export interface Conversation {
   mode?: ConversationMode;
   isArchived?: boolean;
   isPrivate?: boolean;
+  summary?: string | null;
+  summaryUpdatedAt?: string | null;
 }
 
 // ---- Models -----------------------------------------------------------------

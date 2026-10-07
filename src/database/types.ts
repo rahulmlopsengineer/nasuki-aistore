@@ -46,6 +46,8 @@ export interface ConversationRow {
   is_pinned: number;
   is_archived: number;
   is_private: number;
+  summary?: string | null;
+  summary_updated_at?: string | null;
   created_at: string;
   updated_at: string;
 }

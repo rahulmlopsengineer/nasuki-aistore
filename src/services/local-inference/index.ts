@@ -12,4 +12,7 @@ if (Platform.OS === "android" || Platform.OS === "ios") {
 }
 
 export * from "./types";
+export * from "./prompt-formatter";
+export * from "./context-builder";
+export * from "./summarizer";
 export { engine };

@@ -34,6 +34,14 @@ yarn-error.*
 # local env files
 .env*.local
 
+# gradle and build artifacts
+.gradle_tmp/
+gradle_home/
+backup/
+android/.gradle/
+android/app/build/
+android/build/
+
 # typescript
 *.tsbuildinfo
 

@@ -1,0 +1,309 @@
+diff --git a/node_modules/llama.rn/android/src/main/CMakeLists.txt b/node_modules/llama.rn/android/src/main/CMakeLists.txt
+index 3f64914..51431f7 100644
+--- a/node_modules/llama.rn/android/src/main/CMakeLists.txt
++++ b/node_modules/llama.rn/android/src/main/CMakeLists.txt
+@@ -43,9 +43,10 @@ set(JNI_SOURCE_FILES
+ function(build_rnllama_jni jni_name rnllama_name arch cpu_flags)
+     if (NOT RNLLAMA_BUILD_FROM_SOURCE)
+         set(PREBUILT_CHECK_PATH ${CMAKE_SOURCE_DIR}/jniLibs/${ANDROID_ABI}/lib${rnllama_name}.so)
++        message(STATUS "DEBUG: Checking for prebuilt ${rnllama_name} at ${PREBUILT_CHECK_PATH}")
+         if (NOT EXISTS ${PREBUILT_CHECK_PATH})
+-            message(STATUS "Skipping ${jni_name} - no prebuilt for ${ANDROID_ABI}")
+-            return()
++            message(WARNING "DEBUG: Prebuilt NOT FOUND for ${ANDROID_ABI}. Force defining target ${jni_name}")
++            # return()
+         endif()
+     endif()
+ 
+@@ -149,11 +150,11 @@ if (ANDROID_ABI AND ANDROID_ABI STREQUAL "arm64-v8a")
+     # Removing fp16 for now as it leads to issues with some models like deepseek r1 distills
+     # https://github.com/mybigday/llama.rn/pull/110#issuecomment-2609918310
+     build_rnllama_jni("rnllama_jni_v8" "rnllama_v8" "arm" "-march=armv8-a")
+-    build_rnllama_jni("rnllama_jni_v8_2" "rnllama_v8_2" "arm" "-march=armv8.2-a")
+-    build_rnllama_jni("rnllama_jni_v8_2_dotprod" "rnllama_v8_2_dotprod" "arm" "-march=armv8.2-a+dotprod")
+-    build_rnllama_jni("rnllama_jni_v8_2_i8mm" "rnllama_v8_2_i8mm" "arm" "-march=armv8.2-a+i8mm")
+-    build_rnllama_jni("rnllama_jni_v8_2_dotprod_i8mm" "rnllama_v8_2_dotprod_i8mm" "arm" "-march=armv8.2-a+dotprod+i8mm")
+-    build_rnllama_jni("rnllama_jni_v8_2_dotprod_i8mm_hexagon_opencl" "rnllama_v8_2_dotprod_i8mm_hexagon_opencl" "arm" "-march=armv8.2-a+dotprod+i8mm")
++    # build_rnllama_jni("rnllama_jni_v8_2" "rnllama_v8_2" "arm" "-march=armv8.2-a")
++    # build_rnllama_jni("rnllama_jni_v8_2_dotprod" "rnllama_v8_2_dotprod" "arm" "-march=armv8.2-a+dotprod")
++    # build_rnllama_jni("rnllama_jni_v8_2_i8mm" "rnllama_v8_2_i8mm" "arm" "-march=armv8.2-a+i8mm")
++    # build_rnllama_jni("rnllama_jni_v8_2_dotprod_i8mm" "rnllama_v8_2_dotprod_i8mm" "arm" "-march=armv8.2-a+dotprod+i8mm")
++    # build_rnllama_jni("rnllama_jni_v8_2_dotprod_i8mm_hexagon_opencl" "rnllama_v8_2_dotprod_i8mm_hexagon_opencl" "arm" "-march=armv8.2-a+dotprod+i8m m")
+ 
+     # https://github.com/ggerganov/llama.cpp/blob/master/docs/android.md#cross-compile-using-android-ndk
+     # llama.cpp will deal with the cpu features
+diff --git a/node_modules/llama.rn/android/src/main/java/com/rnllama/RNLlama.java b/node_modules/llama.rn/android/src/main/java/com/rnllama/RNLlama.java
+index 76c65ee..3ec1955 100644
+--- a/node_modules/llama.rn/android/src/main/java/com/rnllama/RNLlama.java
++++ b/node_modules/llama.rn/android/src/main/java/com/rnllama/RNLlama.java
+@@ -193,11 +193,18 @@ public class RNLlama {
+     boolean hasAdreno = hasAdrenoGpuHint();
+     boolean hasHexagon = isHexagonSupported();
+ 
++    Log.d(TAG, "CPU Features: " + cpuFeatures);
++    Log.d(TAG, "hasFp16: " + hasFp16 + ", hasDotProd: " + hasDotProd + ", hasI8mm: " + hasI8mm);
++    Log.d(TAG, "hasAdreno: " + hasAdreno + ", hasHexagon: " + hasHexagon);
++    Log.d(TAG, "Supported ABIs: " + android.text.TextUtils.join(", ", Build.SUPPORTED_ABIS));
++
+     try {
+       boolean jniLoaded = false;
+       String loadedLib = "";
+       if (isArm64V8a()) {
++        Log.d(TAG, "Architecture is arm64-v8a. Attempting to load variants...");
+         if (hasDotProd && hasI8mm && hasHexagon && hasAdreno) {
++          Log.d(TAG, "Trying: rnllama_jni_v8_2_dotprod_i8mm_hexagon_opencl");
+           if (tryLoadLibrary("rnllama_jni_v8_2_dotprod_i8mm_hexagon_opencl")) {
+             jniLoaded = true;
+             loadedLib = "rnllama_jni_v8_2_dotprod_i8mm_hexagon_opencl";
+@@ -252,16 +259,19 @@ public class RNLlama {
+ 
+       if (!jniLoaded) {
+         // Fallback to generic JNI
++        Log.d(TAG, "Attempting to load generic JNI: rnllama_jni");
+         System.loadLibrary("rnllama_jni");
+         loadedLib = "rnllama_jni";
+       }
+ 
++      Log.d(TAG, "Attempting to load: rnllama");
+       System.loadLibrary("rnllama");
++      Log.d(TAG, "Successfully loaded: rnllama");
+       nativeSetLoadedLibrary(loadedLib);
+       libsLoaded = true;
+       return true;
+     } catch (UnsatisfiedLinkError e) {
+-      Log.e(TAG, "Failed to load native libraries", e);
++      Log.e(TAG, "Failed to load native libraries: " + e.getMessage(), e);
+       return false;
+     }
+   }
+diff --git a/node_modules/llama.rn/android/src/main/java/com/rnllama/RNLlamaModule.java b/node_modules/llama.rn/android/src/main/java/com/rnllama/RNLlamaModule.java
+index 407a62c..47a984c 100644
+--- a/node_modules/llama.rn/android/src/main/java/com/rnllama/RNLlamaModule.java
++++ b/node_modules/llama.rn/android/src/main/java/com/rnllama/RNLlamaModule.java
+@@ -35,18 +35,22 @@ public class RNLlamaModule extends NativeRNLlamaSpec {
+ 
+       long jsContextPointer = context.getJavaScriptContextHolder().get();
+       CallInvokerHolderImpl holder =
+-        (CallInvokerHolderImpl) context.getCatalystInstance().getJSCallInvokerHolder();
++        (CallInvokerHolderImpl) context.getJSCallInvokerHolder();
+ 
+       if (jsContextPointer == 0 || holder == null) {
+         promise.resolve(false);
+         return;
+       }
+ 
++      android.util.Log.d("RNLlama", "Attempting JSI installation. jsContext: " + jsContextPointer);
+       installJSIBindings(jsContextPointer, holder);
++      android.util.Log.d("RNLlama", "JSI installation successful.");
+       promise.resolve(true);
+       return;
+     } catch (UnsatisfiedLinkError e) {
++      android.util.Log.e("RNLlama", "UnsatisfiedLinkError: " + e.getMessage());
+     } catch (Exception e) {
++      android.util.Log.e("RNLlama", "Exception: " + e.getMessage());
+     }
+     promise.resolve(false);
+   }
+diff --git a/node_modules/llama.rn/android/src/main/rnllama/CMakeLists.txt b/node_modules/llama.rn/android/src/main/rnllama/CMakeLists.txt
+index 8ef1659..bfe98bd 100644
+--- a/node_modules/llama.rn/android/src/main/rnllama/CMakeLists.txt
++++ b/node_modules/llama.rn/android/src/main/rnllama/CMakeLists.txt
+@@ -440,11 +440,11 @@ build_rnllama_library("rnllama" "generic" "")
+ if (ANDROID_ABI AND ANDROID_ABI STREQUAL "arm64-v8a")
+     # ARM64 targets
+     build_rnllama_library("rnllama_v8" "arm" "-march=armv8-a")
+-    build_rnllama_library("rnllama_v8_2" "arm" "-march=armv8.2-a")
+-    build_rnllama_library("rnllama_v8_2_dotprod" "arm" "-march=armv8.2-a+dotprod")
+-    build_rnllama_library("rnllama_v8_2_i8mm" "arm" "-march=armv8.2-a+i8mm")
+-    build_rnllama_library("rnllama_v8_2_dotprod_i8mm" "arm" "-march=armv8.2-a+dotprod+i8mm")
+-    build_rnllama_library("rnllama_v8_2_dotprod_i8mm_hexagon_opencl" "arm" "-march=armv8.2-a+dotprod+i8mm")
++    # build_rnllama_library("rnllama_v8_2" "arm" "-march=armv8.2-a")
++    # build_rnllama_library("rnllama_v8_2_dotprod" "arm" "-march=armv8.2-a+dotprod")
++    # build_rnllama_library("rnllama_v8_2_i8mm" "arm" "-march=armv8.2-a+i8mm")
++    # build_rnllama_library("rnllama_v8_2_dotprod_i8mm" "arm" "-march=armv8.2-a+dotprod+i8mm")
++    # build_rnllama_library("rnllama_v8_2_dotprod_i8mm_hexagon_opencl" "arm" "-march=armv8.2-a+dotprod+i8mm")
+ 
+ elseif (ANDROID_ABI AND ANDROID_ABI STREQUAL "x86_64")
+     # x86_64 target
+diff --git a/node_modules/llama.rn/cpp/ggml-cpu.h b/node_modules/llama.rn/cpp/ggml-cpu.h
+index 1024e5f..c95ddb2 100644
+--- a/node_modules/llama.rn/cpp/ggml-cpu.h
++++ b/node_modules/llama.rn/cpp/ggml-cpu.h
+@@ -60,6 +60,7 @@ extern "C" {
+     LM_GGML_BACKEND_API int                           lm_ggml_threadpool_get_n_threads (struct lm_ggml_threadpool * threadpool);
+     LM_GGML_BACKEND_API void                          lm_ggml_threadpool_pause         (struct lm_ggml_threadpool * threadpool);
+     LM_GGML_BACKEND_API void                          lm_ggml_threadpool_resume        (struct lm_ggml_threadpool * threadpool);
++    LM_GGML_BACKEND_API int                           lm_ggml_threadpool_get_worker_tid(struct lm_ggml_threadpool * threadpool, int ith);
+ 
+     // lm_ggml_graph_plan() has to be called before lm_ggml_graph_compute()
+     // when plan.work_size > 0, caller must allocate memory for plan.work_data
+diff --git a/node_modules/llama.rn/cpp/ggml-cpu/ggml-cpu.c b/node_modules/llama.rn/cpp/ggml-cpu/ggml-cpu.c
+index 5016976..c6dd819 100644
+--- a/node_modules/llama.rn/cpp/ggml-cpu/ggml-cpu.c
++++ b/node_modules/llama.rn/cpp/ggml-cpu/ggml-cpu.c
+@@ -34,8 +34,9 @@
+ #include <limits.h>
+ #include <stdarg.h>
+ #include <signal.h>
+-#if defined(__gnu_linux__)
++#if defined(__gnu_linux__) || defined(__ANDROID__)
+ #include <syscall.h>
++#include <unistd.h>
+ #endif
+ 
+ #ifdef LM_GGML_USE_OPENMP
+@@ -513,6 +514,7 @@ struct lm_ggml_compute_state {
+     bool cpumask[LM_GGML_MAX_N_THREADS];
+     struct lm_ggml_threadpool * threadpool;
+     int ith;
++    int tid;
+ };
+ 
+ // Helpers for polling loops
+@@ -3202,6 +3204,14 @@ static thread_ret_t lm_ggml_graph_compute_secondary_thread(void* data) {
+     struct lm_ggml_compute_state * state = (struct lm_ggml_compute_state *) data;
+     struct lm_ggml_threadpool * threadpool = state->threadpool;
+ 
++#if defined(__ANDROID__)
++    state->tid = gettid();
++#elif defined(__gnu_linux__)
++    state->tid = syscall(SYS_gettid);
++#else
++    state->tid = 0;
++#endif
++
+     lm_ggml_thread_apply_priority(threadpool->prio);
+     if (lm_ggml_thread_cpumask_is_valid(state->cpumask)) {
+         lm_ggml_thread_apply_affinity(state->cpumask);
+@@ -3302,6 +3312,11 @@ static struct lm_ggml_threadpool * lm_ggml_threadpool_new_impl(
+     for (int j = 0; j < tpp->n_threads; j++) {
+         workers[j].threadpool = threadpool;
+         workers[j].ith        = j;
++#if defined(__ANDROID__)
++        if (j == 0) workers[j].tid = gettid();
++#elif defined(__gnu_linux__)
++        if (j == 0) workers[j].tid = syscall(SYS_gettid);
++#endif
+     }
+ 
+     threadpool->workers = workers;
+@@ -3893,3 +3908,17 @@ void lm_ggml_cpu_init(void) {
+ 
+     lm_ggml_critical_section_end();
+ }
++
++int lm_ggml_threadpool_get_worker_tid(struct lm_ggml_threadpool * threadpool, int ith) {
++    if (threadpool == NULL || ith < 0 || ith >= threadpool->n_threads) {
++        return 0;
++    }
++    return threadpool->workers[ith].tid;
++}
++
++int lm_ggml_threadpool_get_n_threads(struct lm_ggml_threadpool * threadpool) {
++    if (threadpool == NULL) {
++        return 0;
++    }
++    return threadpool->n_threads;
++}
+diff --git a/node_modules/llama.rn/cpp/jsi/RNLlamaJSI.cpp b/node_modules/llama.rn/cpp/jsi/RNLlamaJSI.cpp
+index fb1e1fc..2f4eee4 100644
+--- a/node_modules/llama.rn/cpp/jsi/RNLlamaJSI.cpp
++++ b/node_modules/llama.rn/cpp/jsi/RNLlamaJSI.cpp
+@@ -1026,6 +1026,22 @@ namespace rnllama_jsi {
+         );
+         runtime.global().setProperty(runtime, "llamaBench", bench);
+ 
++        auto getWorkerTids = jsi::Function::createFromHostFunction(runtime,
++            jsi::PropNameID::forAscii(runtime, "llamaGetWorkerTids"),
++            1,
++            [](jsi::Runtime& runtime, const jsi::Value& thisValue, const jsi::Value* arguments, size_t count) -> jsi::Value {
++                int contextId = (int)arguments[0].asNumber();
++                auto ctx = getContextOrThrow(contextId);
++                std::vector<int> tids = ctx->getWorkerTids();
++                jsi::Array res(runtime, tids.size());
++                for (size_t i = 0; i < tids.size(); i++) {
++                    res.setValueAtIndex(runtime, i, jsi::Value(tids[i]));
++                }
++                return res;
++            }
++        );
++        runtime.global().setProperty(runtime, "llamaGetWorkerTids", getWorkerTids);
++
+         auto completion = jsi::Function::createFromHostFunction(runtime,
+             jsi::PropNameID::forAscii(runtime, "llamaCompletion"),
+             3,
+diff --git a/node_modules/llama.rn/cpp/rn-llama.cpp b/node_modules/llama.rn/cpp/rn-llama.cpp
+index 1126dec..c0df380 100644
+--- a/node_modules/llama.rn/cpp/rn-llama.cpp
++++ b/node_modules/llama.rn/cpp/rn-llama.cpp
+@@ -880,4 +880,33 @@ void llama_rn_context::clearCache(bool clear_data) {
+     }
+ }
+ 
++std::vector<int> llama_rn_context::getWorkerTids() const {
++    std::vector<int> tids;
++
++    auto add_tids_from_tp = [&tids](lm_ggml_threadpool * tp) {
++        if (tp == nullptr) return;
++        int n = lm_ggml_threadpool_get_n_threads(tp);
++        for (int i = 0; i < n; i++) {
++            int tid = lm_ggml_threadpool_get_worker_tid(tp, i);
++            if (tid > 0) {
++                bool exists = false;
++                for (int existing : tids) {
++                    if (existing == tid) {
++                        exists = true;
++                        break;
++                    }
++                }
++                if (!exists) {
++                    tids.push_back(tid);
++                }
++            }
++        }
++    };
++
++    add_tids_from_tp(threadpool);
++    add_tids_from_tp(threadpool_batch);
++
++    return tids;
++}
++
+ }
+diff --git a/node_modules/llama.rn/cpp/rn-llama.h b/node_modules/llama.rn/cpp/rn-llama.h
+index 0b9865e..0c7c62e 100644
+--- a/node_modules/llama.rn/cpp/rn-llama.h
++++ b/node_modules/llama.rn/cpp/rn-llama.h
+@@ -188,6 +188,8 @@ struct llama_rn_context {
+     std::vector<std::string> getMediaHashes() const;
+     void setMediaHashes(const std::vector<std::string> &hashes);
+ 
++    __attribute__((visibility("default"))) std::vector<int> getWorkerTids() const;
++
+     // TTS fields and methods (delegated to TTS context)
+     llama_rn_context_tts *tts_wrapper = nullptr;
+     bool has_vocoder = false;
+diff --git a/node_modules/llama.rn/src/index.ts b/node_modules/llama.rn/src/index.ts
+index 220d289..c7b4975 100644
+--- a/node_modules/llama.rn/src/index.ts
++++ b/node_modules/llama.rn/src/index.ts
+@@ -121,6 +121,7 @@ const jsiBindingKeys = [
+   'llamaGetParallelStatus',
+   'llamaSubscribeParallelStatus',
+   'llamaUnsubscribeParallelStatus',
++  'llamaGetWorkerTids',
+ ] as const
+ 
+ type JsiBindingKey = (typeof jsiBindingKeys)[number]
+@@ -1081,6 +1082,11 @@ export class LlamaContext {
+     const { llamaReleaseContext } = getJsi()
+     return llamaReleaseContext(this.id)
+   }
++
++  async getWorkerTids(): Promise<number[]> {
++    const { llamaGetWorkerTids } = getJsi()
++    return llamaGetWorkerTids(this.id)
++  }
+ }
+ 
+ export async function toggleNativeLog(enabled: boolean): Promise<void> {

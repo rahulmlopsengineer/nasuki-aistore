@@ -11,7 +11,7 @@ export const formatKb = (kb: number): string => {
 };
 
 export const formatPrice = (price: number): string =>
-  price === 0 ? "Free" : `${price} credits`;
+  "Free";
 
 export const relativeTime = (iso: string): string => {
   const then = new Date(iso).getTime();

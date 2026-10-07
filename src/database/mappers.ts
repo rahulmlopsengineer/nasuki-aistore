@@ -52,6 +52,8 @@ export function mapConversation(row: ConversationRow): Conversation {
     pinned: !!row.is_pinned,
     isArchived: !!row.is_archived,
     isPrivate: !!row.is_private,
+    summary: row.summary ?? null,
+    summaryUpdatedAt: row.summary_updated_at ?? null,
     updatedAt: row.updated_at,
     createdAt: row.created_at,
   };

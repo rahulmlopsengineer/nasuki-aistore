@@ -13,8 +13,16 @@ import {
   ScreenContainer,
   Touchable,
 } from "@/src/components/ui";
-import { ChatService, LocalInference, DEFAULT_MODEL_ID, SUPPORTED_MODELS, getModelPath } from "@/src/services";
-import { Message } from "@/src/types";
+import {
+  ChatService,
+  LocalInference,
+  DEFAULT_MODEL_ID,
+  SUPPORTED_MODELS,
+  getModelPath,
+  ContextBuilder,
+  ConversationSummarizer,
+} from "@/src/services";
+import { Conversation, Message } from "@/src/types";
 import { useTheme } from "@/src/theme";
 
 const SUGGESTIONS = [
@@ -23,21 +31,14 @@ const SUGGESTIONS = [
   "Explain like I'm five",
 ];
 
-const MAX_CTX_TOKENS = 200;
-
-function buildContextPrompt(messages: Message[], currentUserMessage: string): string {
-  // Approximate 4 chars per token; budget ~147 tokens input, ~45 tokens reserved output
-  const budgetChars = (MAX_CTX_TOKENS - 45) * 4;
-  let historyStr = "";
-  const recentMessages = messages.slice(-6); // last 3 turns
-  for (const m of recentMessages) {
-    const roleLabel = m.role === "user" ? "User" : "Assistant";
-    const line = `${roleLabel}: ${m.content}\n`;
-    if ((historyStr + line).length > budgetChars) break;
-    historyStr = line + historyStr;
+function cleanAssistantText(text: string): string {
+  if (!text) return "";
+  let cleaned = text;
+  const stopIndex = cleaned.search(/(\nUser:|\nSystem:|\nUser|\nSystem|User:|System:)/i);
+  if (stopIndex !== -1) {
+    cleaned = cleaned.substring(0, stopIndex);
   }
-  console.log(`[NASUKI][CONTEXT] Context limit: ${MAX_CTX_TOKENS}, Estimated input chars: ${historyStr.length + currentUserMessage.length}`);
-  return `System: You are NASUKI, a helpful on-device AI assistant.\n${historyStr}User: ${currentUserMessage}\nAssistant:`;
+  return cleaned.trim();
 }
 
 export default function ChatConversation() {
@@ -46,6 +47,7 @@ export default function ChatConversation() {
   const searchParams = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(searchParams.id) ? searchParams.id[0] : (searchParams.id || "cnv-default");
 
+  const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [title, setTitle] = useState("New chat");
   const [text, setText] = useState("");
@@ -63,7 +65,10 @@ export default function ChatConversation() {
   useEffect(() => {
     (async () => {
       const convo = await ChatService.getConversation(id);
-      if (convo) setTitle(convo.title);
+      if (convo) {
+        setConversation(convo);
+        setTitle(convo.title);
+      }
       const existing = await ChatService.getMessages(id);
       setMessages(existing);
       setModelLoading(false); // Unblock UI immediately so conversation opens instantly
@@ -144,16 +149,27 @@ export default function ChatConversation() {
         }
         console.log("[NASUKI][CHAT][5] MODEL_READY");
 
-        const prompt = buildContextPrompt(messages, content);
-        console.log("[NASUKI][CHAT] Generation prompt:\n" + prompt);
+        // Fetch fresh conversation to get latest summary if available
+        const freshConvo = await ChatService.getConversation(id);
+        const builtContext = ContextBuilder.buildConversationContext({
+          conversationId: id,
+          summary: freshConvo?.summary ?? conversation?.summary,
+          messages,
+          currentUserMessage: content,
+          maxContextTokens: 200,
+          reservedOutputTokens: 72,
+        });
+
+        console.log("[NASUKI][CHAT] Built Context Prompt:\n" + builtContext.prompt);
         console.log("[NASUKI][CHAT][6] GENERATE_CALLED");
 
-        const result = await LocalInference.generate(prompt, {
-          maxTokens: 128,
+        const result = await LocalInference.generate(builtContext.prompt, {
+          maxTokens: builtContext.reservedOutputTokens,
+          stopSequences: ["\nUser:", "User:", "\nSystem:", "System:", "\nUser", "\nSystem"],
           onToken: (token) => {
             if (!generatingId.current) return;
             accumulatedContent.current += token;
-            const currentText = accumulatedContent.current;
+            const currentText = cleanAssistantText(accumulatedContent.current);
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantMsg.id ? { ...m, content: currentText } : m,
@@ -167,7 +183,7 @@ export default function ChatConversation() {
           throw new Error(result.error);
         }
 
-        const finalContent = (result.text || accumulatedContent.current).trim();
+        const finalContent = cleanAssistantText(result.text || accumulatedContent.current);
         await ChatService.completeAssistantMessage(id, assistantMsg.id, finalContent, "completed");
         console.log("[NASUKI][CHAT][12] ASSISTANT_MESSAGE_SAVED");
 
@@ -180,6 +196,14 @@ export default function ChatConversation() {
         );
         console.log("[NASUKI][CHAT][13] UI_UPDATED");
         console.log("[NASUKI][CHAT] Generation completed. Tokens:", result.metrics.tokenCount, "Speed:", result.metrics.tokensPerSec?.toFixed(2), "tok/s");
+
+        // Post-generation background compaction check
+        const updatedMsgCount = messages.length + 2;
+        if (ConversationSummarizer.shouldSummarize(updatedMsgCount, builtContext.estimatedTokens)) {
+          ConversationSummarizer.summarizeConversation(id).catch((err: any) =>
+            console.warn("[NASUKI][CHAT] Background summarization error:", err)
+          );
+        }
       } catch (e: any) {
         console.error("[NASUKI][CHAT] Generation error:", e);
         const partial = accumulatedContent.current.trim() || "Inference error occurred.";
@@ -200,7 +224,7 @@ export default function ChatConversation() {
         scrollToEnd();
       }
     },
-    [generating, id, messages, scrollToEnd],
+    [conversation, generating, id, messages, scrollToEnd],
   );
 
   const stop = useCallback(async () => {

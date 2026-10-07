@@ -1,6 +1,5 @@
-import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -15,21 +14,14 @@ import {
   SettingRow,
 } from "@/src/components/ui";
 import { useAuth } from "@/src/hooks/use-auth";
-import { CreditService } from "@/src/services";
-import { CreditWallet } from "@/src/types";
 import { useTheme } from "@/src/theme";
 
 export default function Profile() {
-  const { colors, radius, spacing, typography } = useTheme();
+  const { colors, spacing, typography } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, signOut } = useAuth();
-  const [wallet, setWallet] = useState<CreditWallet | null>(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
-
-  useEffect(() => {
-    CreditService.getWallet().then(setWallet);
-  }, []);
 
   const doLogout = async () => {
     setConfirmLogout(false);
@@ -64,23 +56,6 @@ export default function Profile() {
             </Text>
           </View>
           <Badge label={user?.method === "google" ? "Google" : "Demo"} tone="accent" />
-        </Card>
-
-        {/* Credit summary */}
-        <Card
-          testID="profile-credits"
-          onPress={() => router.push("/credits")}
-          style={styles.creditRow}
-        >
-          <View style={[styles.creditIcon, { backgroundColor: colors.background, borderRadius: radius.md }]}>
-            <Ionicons name="diamond-outline" size={20} color={colors.accent} />
-          </View>
-          <View style={{ flex: 1, paddingHorizontal: spacing.md }}>
-            <Text style={[typography.title, { color: colors.text }]}>Credits</Text>
-            <Text style={[typography.small, { color: colors.textSecondary }]}>Balance & top-ups</Text>
-          </View>
-          <Text style={[typography.h3, { color: colors.text }]}>{wallet?.balance ?? "—"}</Text>
-          <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} style={{ marginLeft: 8 }} />
         </Card>
 
         {/* Menu */}
@@ -128,6 +103,4 @@ export default function Profile() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   account: { flexDirection: "row", alignItems: "center" },
-  creditRow: { flexDirection: "row", alignItems: "center" },
-  creditIcon: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
 });

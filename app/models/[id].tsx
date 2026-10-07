@@ -100,7 +100,7 @@ export default function ModelDetails() {
           <View style={styles.badges}>
             <Badge label={`v${model.version}`} />
             <Badge label={model.license} tone="info" />
-            <Badge label={formatPrice(model.price)} tone={model.price === 0 ? "success" : "accent"} />
+            <Badge label="Free" tone="success" />
           </View>
         </View>
 
@@ -143,7 +143,7 @@ export default function ModelDetails() {
         ) : (
           <Button
             testID="model-download-cta"
-            label={model.price === 0 ? "Download" : `Get for ${formatPrice(model.price)}`}
+            label="Download"
             icon="download-outline"
             variant="solid"
             onPress={download}
