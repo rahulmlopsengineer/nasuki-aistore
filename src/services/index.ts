@@ -10,8 +10,8 @@ export { DataDeletionService } from "./data-deletion-service";
 export { LocalInference, DEFAULT_MODEL_ID, SUPPORTED_MODELS, getModelPath, ContextBuilder, PromptFormatter, ConversationSummarizer, estimateTokens } from "./local-inference";
 export { ContextEngine, MemoryExtractor, MemoryConsolidator, QueryAnalyzer, VectorBenchmark, defaultVectorStore } from "./vector";
 export * from "./vector/types";
-export { DocumentContextRetriever } from "./rag/context-retriever";
-export type { ContextRetriever, ContextChunk } from "./rag/context-retriever";
+export { DocumentContextRetriever, HybridDocumentRetriever, DocumentChunker, DocumentEmbedder, RagDebug } from "./rag";
+export type { ContextRetriever, ContextChunk } from "./rag";
 export {
   getActiveUserId,
   setActiveUserId,

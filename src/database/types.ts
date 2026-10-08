@@ -4,7 +4,14 @@ export type AuthProvider = "google" | "demo";
 export type ConversationMode = "offline" | "online" | "rag" | "private";
 export type DbMessageRole = "user" | "assistant" | "system";
 export type DbMessageStatus = "pending" | "generating" | "completed" | "failed";
-export type DbDocumentStatus = "pending" | "processing" | "ready" | "failed";
+export type DbDocumentStatus =
+  | "pending"
+  | "uploading"
+  | "processing"
+  | "embedding"
+  | "ready"
+  | "failed"
+  | "error";
 export type ModelStatus = "available" | "coming_soon" | "deprecated";
 export type InstalledModelStatus =
   | "not_installed"
@@ -98,4 +105,33 @@ export interface MemoryRow {
   updated_at: string;
   last_accessed_at: string;
   access_count: number;
+}
+
+export interface DocumentRow {
+  id: string;
+  user_id: string;
+  filename: string;
+  file_path: string | null;
+  mime_type: string | null;
+  file_size: number | null;
+  status: string;
+  checksum: string | null;
+  embedding_progress: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DocumentChunkRow {
+  id: string;
+  document_id: string;
+  page_number: number | null;
+  chunk_index: number;
+  text: string;
+  heading: string | null;
+  section_path: string | null;
+  token_count: number;
+  embedding_reference: string | null;
+  embedding_json: string | null;
+  checksum: string | null;
+  created_at: string;
 }

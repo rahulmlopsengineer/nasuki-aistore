@@ -9,7 +9,7 @@ export interface Migration {
   statements: string[];
 }
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const MIGRATIONS: Migration[] = [
   {
@@ -104,6 +104,8 @@ export const MIGRATIONS: Migration[] = [
         mime_type TEXT,
         file_size INTEGER,
         status TEXT NOT NULL DEFAULT 'pending',
+        checksum TEXT,
+        embedding_progress REAL DEFAULT 0.0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );`,
@@ -114,7 +116,12 @@ export const MIGRATIONS: Migration[] = [
         page_number INTEGER,
         chunk_index INTEGER NOT NULL,
         text TEXT NOT NULL,
+        heading TEXT,
+        section_path TEXT,
+        token_count INTEGER NOT NULL DEFAULT 0,
         embedding_reference TEXT,
+        embedding_json TEXT,
+        checksum TEXT,
         created_at TEXT NOT NULL
       );`,
       `CREATE INDEX IF NOT EXISTS idx_chunks_document
@@ -181,6 +188,19 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX IF NOT EXISTS idx_memories_user ON memories(user_id);`,
       `CREATE INDEX IF NOT EXISTS idx_memories_convo ON memories(conversation_id);`,
       `CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(memory_type);`,
+    ],
+  },
+  {
+    version: 5,
+    statements: [
+      `ALTER TABLE documents ADD COLUMN checksum TEXT;`,
+      `ALTER TABLE documents ADD COLUMN embedding_progress REAL DEFAULT 0.0;`,
+      `ALTER TABLE document_chunks ADD COLUMN token_count INTEGER NOT NULL DEFAULT 0;`,
+      `ALTER TABLE document_chunks ADD COLUMN heading TEXT;`,
+      `ALTER TABLE document_chunks ADD COLUMN section_path TEXT;`,
+      `ALTER TABLE document_chunks ADD COLUMN embedding_json TEXT;`,
+      `ALTER TABLE document_chunks ADD COLUMN checksum TEXT;`,
+      `CREATE INDEX IF NOT EXISTS idx_documents_checksum ON documents(user_id, checksum);`,
     ],
   },
 ];
