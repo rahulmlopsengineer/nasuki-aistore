@@ -19,8 +19,9 @@ import {
   DEFAULT_MODEL_ID,
   SUPPORTED_MODELS,
   getModelPath,
-  ContextBuilder,
+  ContextEngine,
   ConversationSummarizer,
+  getActiveUserId,
 } from "@/src/services";
 import { Conversation, Message } from "@/src/types";
 import { useTheme } from "@/src/theme";
@@ -149,22 +150,23 @@ export default function ChatConversation() {
         }
         console.log("[NASUKI][CHAT][5] MODEL_READY");
 
-        // Fetch fresh conversation to get latest summary if available
+        // Build Adaptive Local Vector Context
         const freshConvo = await ChatService.getConversation(id);
-        const builtContext = ContextBuilder.buildConversationContext({
+        const activeUserId = freshConvo?.userId || getActiveUserId() || "demo-user";
+
+        const adaptiveContext = await ContextEngine.buildAdaptiveContext({
+          userId: activeUserId,
           conversationId: id,
           summary: freshConvo?.summary ?? conversation?.summary,
           messages,
           currentUserMessage: content,
-          maxContextTokens: 200,
-          reservedOutputTokens: 72,
         });
 
-        console.log("[NASUKI][CHAT] Built Context Prompt:\n" + builtContext.prompt);
+        console.log("[NASUKI][CHAT] Adaptive Context Prompt:\n" + adaptiveContext.prompt);
         console.log("[NASUKI][CHAT][6] GENERATE_CALLED");
 
-        const result = await LocalInference.generate(builtContext.prompt, {
-          maxTokens: builtContext.reservedOutputTokens,
+        const result = await LocalInference.generate(adaptiveContext.prompt, {
+          maxTokens: adaptiveContext.budget.reservedOutputTokens,
           stopSequences: ["\nUser:", "User:", "\nSystem:", "System:", "\nUser", "\nSystem"],
           onToken: (token) => {
             if (!generatingId.current) return;
@@ -197,9 +199,18 @@ export default function ChatConversation() {
         console.log("[NASUKI][CHAT][13] UI_UPDATED");
         console.log("[NASUKI][CHAT] Generation completed. Tokens:", result.metrics.tokenCount, "Speed:", result.metrics.tokensPerSec?.toFixed(2), "tok/s");
 
+        // Asynchronous post-generation memory extraction
+        ContextEngine.processPostGenerationMemory(
+          activeUserId,
+          id,
+          content,
+          finalContent,
+          assistantMsg.id,
+        ).catch((err) => console.warn("[NASUKI][VECTOR] Post-generation memory extraction error:", err));
+
         // Post-generation background compaction check
         const updatedMsgCount = messages.length + 2;
-        if (ConversationSummarizer.shouldSummarize(updatedMsgCount, builtContext.estimatedTokens)) {
+        if (ConversationSummarizer.shouldSummarize(updatedMsgCount, adaptiveContext.estimatedTokens)) {
           ConversationSummarizer.summarizeConversation(id).catch((err: any) =>
             console.warn("[NASUKI][CHAT] Background summarization error:", err)
           );

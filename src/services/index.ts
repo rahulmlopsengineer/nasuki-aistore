@@ -8,6 +8,8 @@ export { FeedbackService, BugReportService } from "./feedback-service";
 export { OnboardingService } from "./onboarding-service";
 export { DataDeletionService } from "./data-deletion-service";
 export { LocalInference, DEFAULT_MODEL_ID, SUPPORTED_MODELS, getModelPath, ContextBuilder, PromptFormatter, ConversationSummarizer, estimateTokens } from "./local-inference";
+export { ContextEngine, MemoryExtractor, MemoryConsolidator, QueryAnalyzer, VectorBenchmark, defaultVectorStore } from "./vector";
+export * from "./vector/types";
 export { DocumentContextRetriever } from "./rag/context-retriever";
 export type { ContextRetriever, ContextChunk } from "./rag/context-retriever";
 export {

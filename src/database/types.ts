@@ -82,3 +82,20 @@ export interface CreditTransactionRow {
   label: string | null;
   created_at: string;
 }
+
+export interface MemoryRow {
+  id: string;
+  user_id: string;
+  conversation_id: string | null;
+  content: string;
+  memory_type: string;
+  importance: number;
+  source_message_id: string | null;
+  token_count: number;
+  embedding_status: string;
+  embedding_json: string | null;
+  created_at: string;
+  updated_at: string;
+  last_accessed_at: string;
+  access_count: number;
+}

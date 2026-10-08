@@ -116,6 +116,34 @@ export interface DocumentChunk {
   content: string;
 }
 
+// ---- Semantic Memories / Vector Context ------------------------------------
+export type MemoryType =
+  | "PROJECT"
+  | "FACT"
+  | "PREFERENCE"
+  | "DECISION"
+  | "GOAL"
+  | "INSTRUCTION"
+  | "SUMMARY"
+  | "CONSTRAINT";
+
+export interface Memory {
+  id: string;
+  userId: string;
+  conversationId?: string | null;
+  content: string;
+  memoryType: MemoryType;
+  importance: number; // 0.0 - 1.0
+  sourceMessageId?: string | null;
+  tokenCount: number;
+  embeddingStatus: "pending" | "ready" | "failed";
+  embedding?: number[] | null;
+  createdAt: string; // ISO
+  updatedAt: string; // ISO
+  lastAccessedAt: string; // ISO
+  accessCount: number;
+}
+
 // ---- Credits ----------------------------------------------------------------
 export type TransactionType = "purchase" | "reward_ad" | "usage" | "bonus";
 

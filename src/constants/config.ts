@@ -46,3 +46,18 @@ export const CREDITS = {
   rewardPerAd: 5,
   starting: 100,
 } as const;
+
+// Adaptive Local Vector Context Engine Configuration
+export const VECTOR_CONFIG = {
+  embeddingDimension: 64,
+  scoringWeights: {
+    similarity: 0.55,
+    importance: 0.20,
+    recency: 0.15,
+    conversationRelevance: 0.10,
+  },
+  deduplicationSimilarityThreshold: 0.85,
+  minRelevanceScoreThreshold: 0.35,
+  workingMemoryTurns: 6,
+  maxRetrievedMemories: 5,
+} as const;

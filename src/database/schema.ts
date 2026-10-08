@@ -9,7 +9,7 @@ export interface Migration {
   statements: string[];
 }
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const MIGRATIONS: Migration[] = [
   {
@@ -157,6 +157,30 @@ export const MIGRATIONS: Migration[] = [
     statements: [
       `ALTER TABLE conversations ADD COLUMN summary TEXT;`,
       `ALTER TABLE conversations ADD COLUMN summary_updated_at TEXT;`,
+    ],
+  },
+  {
+    version: 4,
+    statements: [
+      `CREATE TABLE IF NOT EXISTS memories (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        conversation_id TEXT,
+        content TEXT NOT NULL,
+        memory_type TEXT NOT NULL DEFAULT 'FACT',
+        importance REAL NOT NULL DEFAULT 1.0,
+        source_message_id TEXT,
+        token_count INTEGER NOT NULL DEFAULT 0,
+        embedding_status TEXT NOT NULL DEFAULT 'pending',
+        embedding_json TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        last_accessed_at TEXT NOT NULL,
+        access_count INTEGER NOT NULL DEFAULT 0
+      );`,
+      `CREATE INDEX IF NOT EXISTS idx_memories_user ON memories(user_id);`,
+      `CREATE INDEX IF NOT EXISTS idx_memories_convo ON memories(conversation_id);`,
+      `CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(memory_type);`,
     ],
   },
 ];

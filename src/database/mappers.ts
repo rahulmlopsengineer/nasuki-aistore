@@ -4,11 +4,13 @@ import {
   ChatMessageState,
   Conversation,
   ConversationMode,
+  Memory,
+  MemoryType,
   Message,
   MessageRole,
   MessageStatus,
 } from "@/src/types";
-import { ConversationRow, MessageRow } from "./types";
+import { ConversationRow, MemoryRow, MessageRow } from "./types";
 
 export function statusToState(status: MessageStatus): ChatMessageState {
   switch (status) {
@@ -72,5 +74,33 @@ export function mapMessage(row: MessageRow): Message {
     tokenCount: row.token_count,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+export function mapMemory(row: MemoryRow): Memory {
+  let embedding: number[] | null = null;
+  if (row.embedding_json) {
+    try {
+      embedding = JSON.parse(row.embedding_json);
+    } catch {
+      embedding = null;
+    }
+  }
+
+  return {
+    id: row.id,
+    userId: row.user_id,
+    conversationId: row.conversation_id,
+    content: row.content,
+    memoryType: (row.memory_type as MemoryType) ?? "FACT",
+    importance: row.importance ?? 1.0,
+    sourceMessageId: row.source_message_id,
+    tokenCount: row.token_count ?? 0,
+    embeddingStatus: (row.embedding_status as "pending" | "ready" | "failed") ?? "pending",
+    embedding,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    lastAccessedAt: row.last_accessed_at,
+    accessCount: row.access_count ?? 0,
   };
 }
